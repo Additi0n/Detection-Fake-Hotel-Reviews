@@ -1,0 +1,9 @@
+split,label,sentiment,n
+train,0,NEG,375
+train,0,POS,375
+train,1,NEG,375
+train,1,POS,375
+test,0,NEG,125
+test,0,POS,125
+test,1,NEG,125
+test,1,POS,125

@@ -69,14 +69,3 @@ class ReviewData:
         """
         skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
         return list(skf.split(np.zeros(len(self)), self.strata))
-
-
-if __name__ == "__main__":
-    train = ReviewData.load_train()
-    fit, val = train.train_val_split()
-    for name, part in (("train (full)", train), ("fit", fit), ("validation", val)):
-        counts = pd.crosstab(part.y, part.sentiment)
-        print(f"{name}: {len(part)} reviews\n{counts}\n")
-    for k, (tr, va) in enumerate(train.cv_folds()):
-        print(f"fold {k}: {len(tr)} train / {len(va)} validation, "
-              f"AI share in validation = {train.y[va].mean():.2f}")

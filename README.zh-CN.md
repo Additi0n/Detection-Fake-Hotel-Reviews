@@ -16,7 +16,7 @@ project1/
 │   ├── config.py             路径、随机种子、列名
 │   ├── split_data.py         筛选英文评论，按 75/25 分层划分训练集和测试集
 │   ├── load_data.py          ReviewData 类：加载数据，划分训练/验证集，生成交叉验证折
-│   ├── preprocessing.py      （待写）文本清洗与词袋表示
+│   ├── preprocessing.py      文本规范化、分词器、词袋向量化器
 │   ├── tune_models.py        （待写）5 个模型的交叉验证 / OOB 调参
 │   ├── evaluate.py           （待写）测试集指标与 McNemar 检验
 │   ├── feature_importance.py （待写）每个模型最重要的 5 个特征
@@ -75,7 +75,45 @@ test = ReviewData.load_test()        # 500 条，只在最终评估时使用
 
 `ReviewData` 对象有以下属性：`ids`、`text`、`y`（1 表示 AI，0 表示人写）、`sentiment`，以及用于分层的 `strata`（标签 × 正负面）。验证集划分和交叉验证折都按 `strata` 分层。
 
-运行 `python src/load_data.py` 会打印各部分的类别分布，可以用来检查划分是否正确。
+### 3. 文本预处理
+
+```python
+from preprocessing import TextPreprocessor
+
+vec = TextPreprocessor().build_vectorizer()   # 采用的设置；未拟合的 CountVectorizer，放进 Pipeline 使用
+TextPreprocessor().tokenize("We wasn't happy")  # ['we', "wasn't", 'happy']
+
+# 其他设置（只用于比较）：
+TextPreprocessor(stop_words=True, stem=True, ngram_range=(1, 2), min_df=10)
+```
+
+采用的预处理方式：
+
+1. 转小写，把弯引号统一成直引号，去掉重音符号；
+2. 只保留字母组成的词，保留 wasn't 这类缩写，丢弃数字和标点；
+3. **保留停用词，不做词干提取，只用单词（unigram）**；
+4. 用 `min_df = 5` 删掉出现在少于 5 条评论里的稀疏词，训练集词表从 4737 个词降到 1351 个。
+
+向量化器要放进 `Pipeline`，保证交叉验证时每一折只在自己的训练部分上拟合词表。
+
+选择这种方式之前，我们在训练集上用 5 折交叉验证粗略比较过几种设置（准确率，模型未调参）：
+
+| 设置 | 特征数 | 朴素贝叶斯 | Lasso 逻辑回归 |
+|------|--------|-----------|----------------|
+| 不删稀疏词（min_df = 1） | 4737 | 0.894 | 0.911 |
+| **采用的设置（min_df = 5）** | **1351** | **0.901** | **0.907** |
+| min_df = 10 | 845 | 0.895 | 0.907 |
+| 去停用词 | 1138 | 0.897 | 0.895 |
+| 词干提取 | 1186 | 0.895 | 0.905 |
+| 去停用词 + 词干 | 1003 | 0.885 | 0.902 |
+| 单词 + 二元词组 | 3665 | 0.908 | 0.909 |
+
+各设置之间的差别都在 1 到 2 个百分点以内，和交叉验证本身的波动差不多。选择理由：
+
+- **保留停用词**：去掉停用词后 Lasso 的准确率下降约 1 个百分点。I、we、the 这类虚词反映写作风格，而人写和 AI 生成的评论恰好在风格上不同。
+- **不做词干提取**：准确率没有提高，而且词干（如 servic、lobbi）会让重要特征更难解释。
+- **min_df = 5**：特征数从 4737 降到 1351，准确率基本不变。
+- **只用单词**：加入二元词组后特征数接近原来的 3 倍，提升也不明显。
 
 ## 数据列说明（processed 文件）
 

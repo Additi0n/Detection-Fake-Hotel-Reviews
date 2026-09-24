@@ -16,7 +16,7 @@ project1/
 │   ├── config.py             paths, random seed, column names
 │   ├── split_data.py         English subset + stratified 75/25 split
 │   ├── load_data.py          loaders; train -> fit/validation split and CV folds
-│   ├── preprocessing.py      (planned) text cleaning + bag-of-words vectorizer
+│   ├── preprocessing.py      text normalisation, tokenizer, bag-of-words vectorizer
 │   ├── tune_models.py        (planned) CV / OOB hyperparameter tuning of the 5 models
 │   ├── evaluate.py           (planned) test-set metrics + McNemar tests
 │   ├── feature_importance.py (planned) top-5 features per model
@@ -71,6 +71,46 @@ test = ReviewData.load_test()        # 500 reviews, final evaluation only
 ```
 
 A `ReviewData` object has the attributes `ids`, `text`, `y` (1 = AI, 0 = human), `sentiment` and `strata` (label × sentiment). The validation split and the CV folds are both stratified on `strata`.
+
+### Text preprocessing
+
+```python
+from preprocessing import TextPreprocessor
+
+vec = TextPreprocessor().build_vectorizer()   # chosen setting; unfitted CountVectorizer for use in a Pipeline
+TextPreprocessor().tokenize("We wasn't happy")  # ['we', "wasn't", 'happy']
+
+# other settings (only used for comparison):
+TextPreprocessor(stop_words=True, stem=True, ngram_range=(1, 2), min_df=10)
+```
+
+The preprocessing used throughout:
+
+1. lowercase, replace curly apostrophes by straight ones, remove accents;
+2. keep alphabetic tokens only, including contractions such as wasn't; drop numbers and punctuation;
+3. **keep stop words, no stemming, unigrams only**;
+4. remove sparse terms with `min_df = 5` (terms in fewer than 5 reviews), which cuts the training vocabulary from 4737 to 1351 terms.
+
+Put the vectorizer inside a `Pipeline` so that each CV fold learns its vocabulary from its own training part only.
+
+Before settling on this, we compared several settings with 5-fold CV accuracy on the training set (untuned models):
+
+| setting | features | naive Bayes | Lasso LR |
+|---------|----------|-------------|----------|
+| no sparse-term removal (min_df = 1) | 4737 | 0.894 | 0.911 |
+| **chosen setting (min_df = 5)** | **1351** | **0.901** | **0.907** |
+| min_df = 10 | 845 | 0.895 | 0.907 |
+| stop words removed | 1138 | 0.897 | 0.895 |
+| stemming | 1186 | 0.895 | 0.905 |
+| stop words removed + stemming | 1003 | 0.885 | 0.902 |
+| unigrams + bigrams | 3665 | 0.908 | 0.909 |
+
+All settings are within 1–2 percentage points of each other, about the size of the CV noise. Reasons for the choice:
+
+- **Keep stop words**: removing them costs Lasso about 1 point. Function words such as I, we and the carry writing style, and style is what separates human from AI reviews.
+- **No stemming**: no gain in accuracy, and stems such as servic or lobbi make the top features harder to interpret.
+- **min_df = 5**: cuts the vocabulary from 4737 to 1351 terms at no cost in accuracy.
+- **Unigrams only**: bigrams nearly triple the number of features for no clear gain.
 
 ## Columns in the processed files
 

@@ -1,4 +1,4 @@
-"""Shared paths and constants for the fake hotel review experiments."""
+"""虚假酒店评论实验共用的路径和常量。"""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +20,7 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.25
 LANGUAGE = "English"
 
-# Label coding: 1 = AI-generated (fake), 0 = written by a human (genuine).
+# 标签编码：1 = AI 生成（假评论），0 = 人写（真评论）。
 LABEL_COL = "label"
 TEXT_COL = "text"
 SENTIMENT_COL = "sentiment"

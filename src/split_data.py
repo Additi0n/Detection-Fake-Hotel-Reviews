@@ -1,12 +1,4 @@
-"""Select the English reviews and create a stratified 75/25 train/test split.
-
-Usage:
-    python src/split_data.py
-
-Outputs:
-    data/processed/train.csv   (1500 reviews)
-    data/processed/test.csv    (500 reviews)
-    results/tables/split_summary.csv
+"""筛选英文评论，并按 75/25 分层划分训练集和测试集。
 """
 import urllib.request
 
@@ -29,15 +21,13 @@ def load_english_reviews():
     df = pd.read_csv(RAW_DATA, index_col=0)
     df = df[df["Review_Language"] == LANGUAGE].reset_index(drop=True)
 
-    # A Booking.com review consists of a positive ("upside") and a negative
-    # ("downside") part, either of which may be empty. We concatenate both
-    # parts into a single document.
+    # Booking.com 的评论分为优点（upside）和缺点（downside）两段，
+    # 这里把两段拼接成一个文档。
     upside = df["Upside_Review"].fillna("").str.strip()
     downside = df["Downside_Review"].fillna("").str.strip()
     text = (upside + " " + downside).str.strip()
 
-    # Only the review text is used as input. Review_Score, hotel and city are
-    # kept for reference but are not used as features.
+    # 模型只使用评论文本作为输入。评分、酒店和城市保留下来供参考，但不作为特征。
     return pd.DataFrame({
         "review_id": df.index,
         TEXT_COL: text,
@@ -67,9 +57,8 @@ def main():
     assert len(reviews) == 2000, f"expected 2000 English reviews, got {len(reviews)}"
     assert not reviews[TEXT_COL].eq("").any(), "found reviews with empty text"
 
-    # Stratify on label x sentiment: the class distribution is identical in
-    # train and test, and so is the positive/negative balance within each
-    # class (needed to compare accuracy on positive vs negative reviews).
+    # 按"标签 × 正负面"分层：训练集和测试集的类别分布相同，
+    # 每个类别内部的正负面比例也相同（比较正面和负面评论上的准确率时需要）。
     strata = reviews[LABEL_COL].astype(str) + "_" + reviews[SENTIMENT_COL]
     train, test = train_test_split(reviews, test_size=TEST_SIZE,
                                    stratify=strata, random_state=RANDOM_STATE)

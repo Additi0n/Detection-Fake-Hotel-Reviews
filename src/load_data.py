@@ -1,71 +1,36 @@
-"""加载处理好的训练集和测试集，并划分验证集。
-
-测试集只用于最终评估选定的 5 个模型。模型开发全部在训练集上进行，
-可以用一次性的留出验证集 (train_val_split)
-也可以用分层 k 折交叉验证 (cv_folds)。
-"""
-import numpy as np
+# 读取训练集/测试集，划分验证集和交叉验证的折
+# 测试集只在最后评估模型时用一次，调参只用训练集
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
-from config import (LABEL_COL, RANDOM_STATE, SENTIMENT_COL, TEST_FILE,
-                    TEXT_COL, TRAIN_FILE)
+from config import SEED, TEST, TRAIN
 
 
 class ReviewData:
-    VAL_SIZE = 0.2
-    N_FOLDS = 5
-
     def __init__(self, df):
-        df = df.reset_index(drop=True)
-        self.ids = df["review_id"].to_numpy()
-        self.text = df[TEXT_COL]
-        self.y = df[LABEL_COL].to_numpy()
-        self.sentiment = df[SENTIMENT_COL].to_numpy()
-        self._df = df
+        self.df = df.reset_index(drop=True)
+        self.X = self.df["text"]
+        self.y = self.df["label"].values
+        self.sent = self.df["sentiment"].values
+        # 标签 x 正负面，分层用
+        self.grp = self.df["label"].astype(str) + "_" + self.df["sentiment"]
 
     def __len__(self):
-        return len(self.y)
+        return len(self.df)
 
-    @classmethod
-    def _read(cls, path):
-        if not path.exists():
-            raise FileNotFoundError(f"{path} not found; run `python src/split_data.py` first")
-        return cls(pd.read_csv(path, keep_default_na=False))
+    @staticmethod
+    def load(name):
+        # name 是 "train" 或 "test"
+        path = TRAIN if name == "train" else TEST
+        return ReviewData(pd.read_csv(path, keep_default_na=False))
 
-    @classmethod
-    def load_train(cls):
-        return cls._read(TRAIN_FILE)
+    def split(self, size=0.2):
+        # 留出一部分做验证集，默认 1200 / 300
+        tr, va = train_test_split(self.df, test_size=size, stratify=self.grp,
+                                  random_state=SEED)
+        return ReviewData(tr), ReviewData(va)
 
-    @classmethod
-    def load_test(cls):
-        """只在最终评估选定模型时调用。"""
-        return cls._read(TEST_FILE)
-
-    @property
-    def strata(self):
-        """按标签 x 正负面分组，用于分层划分。"""
-        return np.char.add(self.y.astype(str), self.sentiment.astype(str))
-
-    def subset(self, idx):
-        return ReviewData(self._df.iloc[idx])
-
-    def train_val_split(self, val_size=VAL_SIZE, random_state=RANDOM_STATE):
-        """划分为训练部分和验证部分。
-
-        默认 val_size = 0.2 时 ,1500 条训练评论分成 1200 条用于拟合、
-        300 条用于验证，按"标签 * 正负面"分层。
-        """
-        train_idx, val_idx = train_test_split(np.arange(len(self)), test_size=val_size,
-                                              stratify=self.strata,
-                                              random_state=random_state)
-        return self.subset(train_idx), self.subset(val_idx)
-
-    def cv_folds(self, n_splits=N_FOLDS, random_state=RANDOM_STATE):
-        """分层 k 折交叉验证的索引，按"标签 * 正负面"分层。
-
-        返回的列表可以直接作为 cv 传给 GridSearchCV 或
-        LogisticRegressionCV, 让所有模型都在同一组折上调参。
-        """
-        skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-        return list(skf.split(np.zeros(len(self)), self.strata))
+    def folds(self, k=5):
+        # 分层 k 折，所有模型调参都用同一组折
+        skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=SEED)
+        return list(skf.split(self.X, self.grp))

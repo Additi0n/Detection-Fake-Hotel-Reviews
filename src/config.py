@@ -1,26 +1,15 @@
-"""虚假酒店评论实验共用的路径和常量。"""
-from pathlib import Path
+# 路径和常量
+import os
 
-ROOT = Path(__file__).resolve().parents[1]
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-DATA_URL = (
-    "https://raw.githubusercontent.com/MichiganNLP/"
-    "multilingual_reviews_deception/master/data/all_data.csv"
-)
-RAW_DATA = ROOT / "data" / "raw" / "all_data.csv"
-PROCESSED_DIR = ROOT / "data" / "processed"
-TRAIN_FILE = PROCESSED_DIR / "train.csv"
-TEST_FILE = PROCESSED_DIR / "test.csv"
+URL = "https://raw.githubusercontent.com/MichiganNLP/multilingual_reviews_deception/master/data/all_data.csv"
+RAW = os.path.join(BASE, "data", "raw", "all_data.csv")
+TRAIN = os.path.join(BASE, "data", "processed", "train.csv")
+TEST = os.path.join(BASE, "data", "processed", "test.csv")
 
-RESULTS_DIR = ROOT / "results"
-TABLES_DIR = RESULTS_DIR / "tables"
-FIGURES_DIR = RESULTS_DIR / "figures"
+TAB_DIR = os.path.join(BASE, "results", "tables")
+FIG_DIR = os.path.join(BASE, "results", "figures")
+MOD_DIR = os.path.join(BASE, "results", "models")
 
-RANDOM_STATE = 42
-TEST_SIZE = 0.25
-LANGUAGE = "English"
-
-# 标签编码：1 = AI 生成（假评论），0 = 人写（真评论）。
-LABEL_COL = "label"
-TEXT_COL = "text"
-SENTIMENT_COL = "sentiment"
+SEED = 42

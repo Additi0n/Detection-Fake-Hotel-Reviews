@@ -1,4 +1,4 @@
-review_id,text,label,sentiment,upside,downside,review_score,city,hotel
+id,text,label,sentiment,upside,downside,score,city,hotel
 3,"Lovely interior.. great location.. friendly staff what is not to like
 restaurant staff could use aome basic training in communication in English to be able to understand tourists :)",0,POS,Lovely interior.. great location.. friendly staff,"what is not to like
 restaurant staff could use aome basic training in communication in English to be able to understand tourists :)",9.0,Ankara,Hotel Ickale

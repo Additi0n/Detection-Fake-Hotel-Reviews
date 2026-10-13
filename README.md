@@ -8,26 +8,29 @@ This project classifies English hotel reviews as written by a human (from Bookin
 
 ```
 project1/
-├── assignment/               assignment description (PDF)
+├── assignment/            assignment description (PDF)
 ├── data/
-│   ├── raw/all_data.csv      original data from MichiganNLP/multilingual_reviews_deception
-│   └── processed/            train.csv (1500) / test.csv (500), made by split_data.py
+│   ├── raw/all_data.csv   original data from MichiganNLP/multilingual_reviews_deception
+│   └── processed/         train.csv (1500) / test.csv (500), made by split_data.py
 ├── src/
-│   ├── config.py             paths, random seed, column names
-│   ├── split_data.py         English subset + stratified 75/25 split
-│   ├── load_data.py          loaders; train -> fit/validation split and CV folds
-│   ├── preprocessing.py      text normalisation, tokenizer, bag-of-words vectorizer
-│   ├── tune_models.py        (planned) CV / OOB hyperparameter tuning of the 5 models
-│   ├── evaluate.py           (planned) test-set metrics + McNemar tests
-│   ├── feature_importance.py (planned) top-5 features per model
-│   └── main.py               (planned) runs the full pipeline end to end
+│   ├── config.py          paths and random seed
+│   ├── split_data.py      English subset + stratified 75/25 split
+│   ├── load_data.py       ReviewData: load train/test, validation split, CV folds
+│   ├── preprocessing.py   TextPreprocessor: tokenizer + bag-of-words vectorizer
+│   ├── nb.py              multinomial naive Bayes (+ chi2 top-k selection)
+│   ├── lr.py              logistic regression with Lasso (L1) penalty
+│   ├── tree.py            single classification tree (cost-complexity pruning)
+│   └── train.py           tunes the models, refits on the full training set, saves results
 ├── results/
-│   ├── tables/               CSV output used for the report tables
-│   └── figures/              plots used in the report
-├── report/                   LaTeX source (JMLR class, single column)
+│   ├── models/            fitted models (.joblib), not in git
+│   ├── tables/            CSV output used for the report tables
+│   └── figures/           plots used in the report
+├── report/                LaTeX source (JMLR class, single column)
 ├── requirements.txt
 └── README.md
 ```
+
+Still to do: `rf.py`, `gb.py` (random forest, gradient boosting) and `evaluate.py` (test-set metrics and McNemar tests).
 
 ## Setup
 
@@ -43,57 +46,77 @@ On Linux/macOS, use `.venv/bin/python` in place of `.venv/Scripts/python`.
 ## Running
 
 ```bash
-python src/split_data.py
+python src/split_data.py     # 1. make train.csv / test.csv
+python src/train.py          # 2. tune and fit nb, lr, tree
+python src/train.py nb lr    #    or only some of them
 ```
+
+### 1. Data split (`split_data.py`)
 
 If `data/raw/all_data.csv` is missing, the script downloads it. It then:
 
 1. keeps the 2000 English reviews (1000 human-written with `source = 0`, 1000 GPT-4 generated with `source = 1`);
 2. joins the upside and downside parts of each review into one `text` field;
-3. splits the reviews 75/25 into train and test, stratified on label × sentiment, with `random_state = 42`.
+3. splits the reviews 75/25 into train and test, stratified on label × sentiment, with seed 42.
 
 | split | human NEG | human POS | AI NEG | AI POS | total |
 |-------|-----------|-----------|--------|--------|-------|
 | train | 375       | 375       | 375    | 375    | 1500  |
 | test  | 125       | 125       | 125    | 125    | 500   |
 
-`results/tables/split_summary.csv` holds the same counts.
+The counts are also written to `results/tables/split_summary.csv`.
 
-### Loading the data
+### 2. Model training (`train.py`)
+
+For each model, `train.py` runs a grid search with 5-fold stratified CV on the training set (the same folds for every model), refits the best setting on all 1500 training reviews and writes:
+
+| output | content |
+|--------|---------|
+| `results/models/{name}.joblib` | final fitted pipeline |
+| `results/tables/cv_{name}.csv` | CV accuracy (mean and sd) for every setting |
+| `results/figures/cv_{name}.png` | tuning curve |
+| `results/tables/feat_{name}.csv` | top 5 features |
+
+The test set is not used here.
+
+| model | pipeline | grid | selected | CV accuracy |
+|-------|----------|------|----------|-------------|
+| `nb` | bag of words → SelectKBest(chi2) → MultinomialNB | k ∈ {10, …, 1000, all}, alpha ∈ {0.1, 0.5, 1} | k = 750, alpha = 0.5 | 0.903 |
+| `lr` | bag of words → LogisticRegression(l1_ratio = 1) | C ∈ 10^-2 … 10^2 (17 values) | C = 1 (203 of 1351 weights non-zero) | 0.915 |
+| `tree` | bag of words → DecisionTreeClassifier | ccp_alpha ∈ {0, …, 0.05} | ccp_alpha = 0.002 (53 leaves) | 0.818 |
+
+Top features:
+
+- **nb**: log P(word | AI) − log P(word | human). Positive values point to AI, negative to human.
+- **lr**: the coefficients. Positive values point to AI, negative to human.
+- **tree**: Gini importance.
+
+### Using the modules
 
 ```python
 from load_data import ReviewData
-
-train = ReviewData.load_train()      # 1500 reviews
-fit, val = train.train_val_split()   # 1200 / 300, both ReviewData objects
-folds = train.cv_folds()             # 5 stratified folds, usable as GridSearchCV(cv=folds)
-test = ReviewData.load_test()        # 500 reviews, final evaluation only
-```
-
-A `ReviewData` object has the attributes `ids`, `text`, `y` (1 = AI, 0 = human), `sentiment` and `strata` (label × sentiment). The validation split and the CV folds are both stratified on `strata`.
-
-### Text preprocessing
-
-```python
 from preprocessing import TextPreprocessor
 
-vec = TextPreprocessor().build_vectorizer()   # chosen setting; unfitted CountVectorizer for use in a Pipeline
-TextPreprocessor().tokenize("We wasn't happy")  # ['we', "wasn't", 'happy']
+d = ReviewData.load("train")     # 1500 reviews; d.X = text, d.y = label, d.sent = sentiment
+tr, va = d.split()               # 1200 / 300 hold-out split
+folds = d.folds()                # 5 stratified folds, pass as GridSearchCV(cv=folds)
+te = ReviewData.load("test")     # 500 reviews, final evaluation only
 
-# other settings (only used for comparison):
-TextPreprocessor(stop_words=True, stem=True, ngram_range=(1, 2), min_df=10)
+vec = TextPreprocessor().make_vec()   # unfitted CountVectorizer, put it inside a Pipeline
 ```
 
-The preprocessing used throughout:
+Splits and folds are stratified on label × sentiment (`d.grp`).
+
+## Text preprocessing
 
 1. lowercase, replace curly apostrophes by straight ones, remove accents;
 2. keep alphabetic tokens only, including contractions such as wasn't; drop numbers and punctuation;
 3. **keep stop words, no stemming, unigrams only**;
 4. remove sparse terms with `min_df = 5` (terms in fewer than 5 reviews), which cuts the training vocabulary from 4737 to 1351 terms.
 
-Put the vectorizer inside a `Pipeline` so that each CV fold learns its vocabulary from its own training part only.
+The vectorizer is the first step of every pipeline, so in CV each fold builds its vocabulary from its own training part only.
 
-Before settling on this, we compared several settings with 5-fold CV accuracy on the training set (untuned models):
+Other settings are available for comparison, e.g. `TextPreprocessor(stop=True, stem=True, ngram=(1, 2), min_df=10)`. Before settling on the default, we compared them with 5-fold CV accuracy on the training set (untuned models):
 
 | setting | features | naive Bayes | Lasso LR |
 |---------|----------|-------------|----------|
@@ -116,9 +139,9 @@ All settings are within 1–2 percentage points of each other, about the size of
 
 | column | description |
 |--------|-------------|
-| `review_id` | row number within the English subset |
+| `id` | row number within the English subset |
 | `text` | upside + downside review text (the only model input) |
 | `label` | 1 = AI-generated (fake), 0 = human-written (genuine) |
 | `sentiment` | `POS` / `NEG`, used to split the test set by sentiment |
 | `upside`, `downside` | the two original review parts |
-| `review_score`, `city`, `hotel` | metadata, not used as features |
+| `score`, `city`, `hotel` | metadata, not used as features |

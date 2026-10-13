@@ -8,27 +8,30 @@
 
 ```
 project1/
-├── assignment/               作业说明（PDF）
+├── assignment/            作业说明（PDF）
 ├── data/
-│   ├── raw/all_data.csv      原始数据，来自 MichiganNLP/multilingual_reviews_deception
-│   └── processed/            train.csv（1500 条）/ test.csv（500 条），由 split_data.py 生成
+│   ├── raw/all_data.csv   原始数据，来自 MichiganNLP/multilingual_reviews_deception
+│   └── processed/         train.csv（1500 条）/ test.csv（500 条），由 split_data.py 生成
 ├── src/
-│   ├── config.py             路径、随机种子、列名
-│   ├── split_data.py         筛选英文评论，按 75/25 分层划分训练集和测试集
-│   ├── load_data.py          ReviewData 类：加载数据，划分训练/验证集，生成交叉验证折
-│   ├── preprocessing.py      文本规范化、分词器、词袋向量化器
-│   ├── tune_models.py        （待写）5 个模型的交叉验证 / OOB 调参
-│   ├── evaluate.py           （待写）测试集指标与 McNemar 检验
-│   ├── feature_importance.py （待写）每个模型最重要的 5 个特征
-│   └── main.py               （待写）一次跑完整个流程
+│   ├── config.py          路径和随机种子
+│   ├── split_data.py      筛选英文评论，按 75/25 分层划分训练集和测试集
+│   ├── load_data.py       ReviewData 类：读取数据、划分验证集、生成交叉验证折
+│   ├── preprocessing.py   TextPreprocessor 类：分词和词袋向量化器
+│   ├── nb.py              多项式朴素贝叶斯（加卡方 top-k 特征选择）
+│   ├── lr.py              Lasso（L1）逻辑回归
+│   ├── tree.py            单棵分类树（代价复杂度剪枝）
+│   └── train.py           调参，用最优参数在全部训练集上重新训练，保存结果
 ├── results/
-│   ├── tables/               报告表格所用的 CSV 结果
-│   └── figures/              报告所用的图
-├── report/                   LaTeX 源文件（JMLR 文档类，单栏）
+│   ├── models/            训练好的模型（.joblib），不进 git
+│   ├── tables/            报告表格所用的 CSV 结果
+│   └── figures/           报告所用的图
+├── report/                LaTeX 源文件（JMLR 文档类，单栏）
 ├── requirements.txt
-├── README.md                 英文说明
-└── README.zh-CN.md           中文说明
+├── README.md              英文说明
+└── README.zh-CN.md        中文说明
 ```
+
+还没写的：`rf.py`、`gb.py`（随机森林、梯度提升）和 `evaluate.py`（测试集指标与 McNemar 检验）。
 
 ## 环境配置
 
@@ -43,17 +46,19 @@ Linux 和 macOS 上把 `.venv/Scripts/python` 换成 `.venv/bin/python`。
 
 ## 运行
 
-### 1. 划分数据集
-
 ```bash
-python src/split_data.py
+python src/split_data.py     # 1. 生成 train.csv / test.csv
+python src/train.py          # 2. 调参并训练 nb、lr、tree
+python src/train.py nb lr    #    也可以只跑其中几个
 ```
+
+### 1. 划分数据集（`split_data.py`）
 
 如果 `data/raw/all_data.csv` 不存在，脚本会先下载它，然后做三件事：
 
 1. 保留 2000 条英文评论，其中人写的 1000 条（`source = 0`），GPT-4 生成的 1000 条（`source = 1`）；
 2. 把每条评论的 upside（优点）和 downside（缺点）两段拼成一个 `text` 字段；
-3. 按"标签 × 正负面"分层，把数据 75/25 分成训练集和测试集，`random_state = 42`。
+3. 按"标签 × 正负面"分层，把数据 75/25 分成训练集和测试集，随机种子为 42。
 
 | 数据集 | 人写 NEG | 人写 POS | AI NEG | AI POS | 合计 |
 |--------|----------|----------|--------|--------|------|
@@ -62,41 +67,57 @@ python src/split_data.py
 
 同样的计数也保存在 `results/tables/split_summary.csv`。
 
-### 2. 加载数据
+### 2. 训练模型（`train.py`）
+
+`train.py` 对每个模型在训练集上做网格搜索，用 5 折分层交叉验证（所有模型用同一组折），选出最优参数后在全部 1500 条训练数据上重新训练，输出以下文件：
+
+| 文件 | 内容 |
+|------|------|
+| `results/models/{name}.joblib` | 最终训练好的 Pipeline |
+| `results/tables/cv_{name}.csv` | 每组参数的交叉验证准确率（均值和标准差） |
+| `results/figures/cv_{name}.png` | 调参曲线 |
+| `results/tables/feat_{name}.csv` | 前 5 个重要特征 |
+
+这一步不使用测试集。
+
+| 模型 | Pipeline | 参数网格 | 选出的参数 | 交叉验证准确率 |
+|------|----------|----------|-----------|----------------|
+| `nb` | 词袋 → SelectKBest(chi2) → MultinomialNB | k ∈ {10, …, 1000, all}，alpha ∈ {0.1, 0.5, 1} | k = 750，alpha = 0.5 | 0.903 |
+| `lr` | 词袋 → LogisticRegression(l1_ratio = 1) | C 从 10^-2 到 10^2，共 17 个值 | C = 1（1351 个权重中 203 个非零） | 0.915 |
+| `tree` | 词袋 → DecisionTreeClassifier | ccp_alpha ∈ {0, …, 0.05} | ccp_alpha = 0.002（53 个叶节点） | 0.818 |
+
+重要特征的计算方法：
+
+- **nb**：log P(词 | AI) − log P(词 | 人写)，大于 0 偏向 AI，小于 0 偏向人写。
+- **lr**：回归系数，大于 0 偏向 AI，小于 0 偏向人写。
+- **tree**：基尼重要性。
+
+### 模块用法
 
 ```python
 from load_data import ReviewData
-
-train = ReviewData.load_train()      # 1500 条
-fit, val = train.train_val_split()   # 1200 / 300，返回的仍是 ReviewData
-folds = train.cv_folds()             # 5 折分层索引，可直接传给 GridSearchCV(cv=folds)
-test = ReviewData.load_test()        # 500 条，只在最终评估时使用
-```
-
-`ReviewData` 对象有以下属性：`ids`、`text`、`y`（1 表示 AI，0 表示人写）、`sentiment`，以及用于分层的 `strata`（标签 × 正负面）。验证集划分和交叉验证折都按 `strata` 分层。
-
-### 3. 文本预处理
-
-```python
 from preprocessing import TextPreprocessor
 
-vec = TextPreprocessor().build_vectorizer()   # 采用的设置；未拟合的 CountVectorizer，放进 Pipeline 使用
-TextPreprocessor().tokenize("We wasn't happy")  # ['we', "wasn't", 'happy']
+d = ReviewData.load("train")     # 1500 条；d.X 是文本，d.y 是标签，d.sent 是正负面
+tr, va = d.split()               # 留出验证集，1200 / 300
+folds = d.folds()                # 5 折分层索引，传给 GridSearchCV(cv=folds)
+te = ReviewData.load("test")     # 500 条，只在最终评估时使用
 
-# 其他设置（只用于比较）：
-TextPreprocessor(stop_words=True, stem=True, ngram_range=(1, 2), min_df=10)
+vec = TextPreprocessor().make_vec()   # 未拟合的 CountVectorizer，放进 Pipeline 使用
 ```
 
-采用的预处理方式：
+验证集划分和交叉验证折都按"标签 × 正负面"（`d.grp`）分层。
+
+## 文本预处理
 
 1. 转小写，把弯引号统一成直引号，去掉重音符号；
 2. 只保留字母组成的词，保留 wasn't 这类缩写，丢弃数字和标点；
 3. **保留停用词，不做词干提取，只用单词（unigram）**；
 4. 用 `min_df = 5` 删掉出现在少于 5 条评论里的稀疏词，训练集词表从 4737 个词降到 1351 个。
 
-向量化器要放进 `Pipeline`，保证交叉验证时每一折只在自己的训练部分上拟合词表。
+向量化器是每个 Pipeline 的第一步，所以交叉验证时每一折只用自己的训练部分建词表。
 
-选择这种方式之前，我们在训练集上用 5 折交叉验证粗略比较过几种设置（准确率，模型未调参）：
+其他设置可以用来做比较，例如 `TextPreprocessor(stop=True, stem=True, ngram=(1, 2), min_df=10)`。确定默认设置之前，我们在训练集上用 5 折交叉验证粗略比较过几种设置（准确率，模型未调参）：
 
 | 设置 | 特征数 | 朴素贝叶斯 | Lasso 逻辑回归 |
 |------|--------|-----------|----------------|
@@ -119,15 +140,15 @@ TextPreprocessor(stop_words=True, stem=True, ngram_range=(1, 2), min_df=10)
 
 | 列名 | 说明 |
 |------|------|
-| `review_id` | 评论在英文子集中的行号 |
+| `id` | 评论在英文子集中的行号 |
 | `text` | upside + downside 拼接后的文本，是模型唯一的输入 |
 | `label` | 1 表示 AI 生成（假评论），0 表示人写（真评论） |
 | `sentiment` | `POS` / `NEG`，用于按正负面分组评估测试集 |
 | `upside`、`downside` | 原始的两段评论 |
-| `review_score`、`city`、`hotel` | 元数据，不作为特征使用 |
+| `score`、`city`、`hotel` | 元数据，不作为特征使用 |
 
 ## 设计说明
 
-- **测试集只用一次**：`load_test()` 只在最终评估 5 个选定模型时调用，调参和模型选择都只用训练集。
+- **测试集只用一次**：`ReviewData.load("test")` 只在最终评估 5 个选定模型时调用，调参和模型选择都只用训练集。
 - **按标签 × 正负面分层**：保证训练集和测试集的类别分布一致，同时让测试集中正面、负面评论数量平衡，方便比较模型在两类评论上的准确率。
 - **不使用评分等元数据**：AI 评论的评分分布与真实评论明显不同（负面评论平均 3.0 对 3.7，正面评论平均 8.4 对 9.4）。使用评分会让模型依赖元数据而不是文本，所以只用评论文本作为输入。

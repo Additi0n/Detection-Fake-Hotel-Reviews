@@ -1,4 +1,4 @@
-review_id,text,label,sentiment,upside,downside,review_score,city,hotel
+id,text,label,sentiment,upside,downside,score,city,hotel
 0,Staff. Serkan türk was a great help during our stay.,0,POS,Staff. Serkan türk was a great help during our stay.,,10.0,Ankara,Hotel Ickale
 1,"Nicely furnished room and nicely decorated lobby. Room service is affordable and the receptionists, especially Mr. Omar, are usually eager to help with any queries.",0,POS,"Nicely furnished room and nicely decorated lobby. Room service is affordable and the receptionists, especially Mr. Omar, are usually eager to help with any queries.",,9.0,Ankara,Hotel Ickale
 2,"Very central, near 2 metro stations. Room was spacious with very nice view. The bathroom was large with good water pressure. The wifi had annoying login that required logging in every time.",0,POS,"Very central, near 2 metro stations. Room was spacious with very nice view. The bathroom was large with good water pressure.",The wifi had annoying login that required logging in every time.,9.0,Ankara,Hotel Ickale

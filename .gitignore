@@ -14,5 +14,8 @@ report/*.fdb_latexmk
 
 submission.zip
 
+# PyCharm project settings
+.idea/
+
 # 训练好的模型，可以用 train.py 重新生成
 results/models/

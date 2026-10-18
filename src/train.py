@@ -17,10 +17,12 @@ matplotlib.use("Agg")
 import lr
 import nb
 import tree
+import rf
+import gb
 from config import FIG_DIR, MOD_DIR, TAB_DIR
 from load_data import ReviewData
 
-MODELS = {"nb": nb, "lr": lr, "tree": tree}
+MODELS = {"nb": nb, "lr": lr, "tree": tree, "rf": rf, "gb": gb, }
 
 
 def main():

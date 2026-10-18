@@ -20,6 +20,8 @@ project1/
 │   ├── nb.py              multinomial naive Bayes (+ chi2 top-k selection)
 │   ├── lr.py              logistic regression with Lasso (L1) penalty
 │   ├── tree.py            single classification tree (cost-complexity pruning)
+│   ├── rf.py              random forest (number of trees and feature subsampling)
+│   ├── gb.py              gradient boosting (number of stages, learning rate and tree depth)
 │   └── train.py           tunes the models, refits on the full training set, saves results
 ├── results/
 │   ├── models/            fitted models (.joblib), not in git
@@ -30,7 +32,7 @@ project1/
 └── README.md
 ```
 
-Still to do: `rf.py`, `gb.py` (random forest, gradient boosting) and `evaluate.py` (test-set metrics and McNemar tests).
+Still to do: `evaluate.py` for final test-set metrics, McNemar comparisons and the random forest's positive-versus-negative review analysis.
 
 ## Setup
 
@@ -47,8 +49,9 @@ On Linux/macOS, use `.venv/bin/python` in place of `.venv/Scripts/python`.
 
 ```bash
 python src/split_data.py     # 1. make train.csv / test.csv
-python src/train.py          # 2. tune and fit nb, lr, tree
-python src/train.py nb lr    #    or only some of them
+python src/train.py          # 2. tune and fit all five registered models, gb, lr, nb, rf, tree
+python src/train.py nb lr    #    train only selected models
+python src/train.py rf gb    #    train random forest and gradient boosting only
 ```
 
 ### 1. Data split (`split_data.py`)
@@ -84,12 +87,16 @@ The test set is not used here.
 | `nb` | bag of words → SelectKBest(chi2) → MultinomialNB | k ∈ {10, …, 1000, all}, alpha ∈ {0.1, 0.5, 1} | k = 750, alpha = 0.5 | 0.903 |
 | `lr` | bag of words → LogisticRegression(l1_ratio = 1) | C ∈ 10^-2 … 10^2 (17 values) | C = 1 (203 of 1351 weights non-zero) | 0.915 |
 | `tree` | bag of words → DecisionTreeClassifier | ccp_alpha ∈ {0, …, 0.05} | ccp_alpha = 0.002 (53 leaves) | 0.818 |
+| `rf` | bag of words → RandomForestClassifier | n_estimators ∈ {100, 300, 500}, max_features ∈ {sqrt, 0.1, 0.3} | n_estimators = 300, max_features = sqrt | 0.9140 |
+| `gb` | bag of words → GradientBoostingClassifier | n_estimators ∈ {100, 200}, learning_rate ∈ {0.03, 0.1}, max_depth ∈ {1, 2, 3} | n_estimators = 200, learning_rate = 0.1, max_depth = 3 | 0.9093 |
 
 Top features:
 
 - **nb**: log P(word | AI) − log P(word | human). Positive values point to AI, negative to human.
 - **lr**: the coefficients. Positive values point to AI, negative to human.
 - **tree**: Gini importance.
+- **rf**: impurity-based feature importance aggregated across the forest.
+- **gb**: impurity-based feature importance aggregated across the boosting trees.
 
 ### Using the modules
 

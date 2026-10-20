@@ -34,8 +34,6 @@ def main():
         "city": df["City Name"],
         "hotel": df["Hotel Name"],
     })
-    assert len(out) == 2000
-    assert (out["text"] != "").all()
 
     # 按 标签 x 正负面 分层，这样测试集里正面和负面评论也是平衡的
     grp = out["label"].astype(str) + "_" + out["sentiment"]

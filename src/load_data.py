@@ -15,9 +15,6 @@ class ReviewData:
         # 标签 x 正负面，分层用
         self.grp = self.df["label"].astype(str) + "_" + self.df["sentiment"]
 
-    def __len__(self):
-        return len(self.df)
-
     @staticmethod
     def load(name):
         # name 是 "train" 或 "test"

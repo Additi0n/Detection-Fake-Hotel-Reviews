@@ -20,6 +20,8 @@ project1/
 │   ├── nb.py              多项式朴素贝叶斯（加卡方 top-k 特征选择）
 │   ├── lr.py              Lasso（L1）逻辑回归
 │   ├── tree.py            单棵分类树（代价复杂度剪枝）
+│   ├── rf.py              随机森林（树的数量、每次分裂考虑的特征数）
+│   ├── gb.py              梯度提升（树的数量、学习率、树深度）
 │   └── train.py           调参，用最优参数在全部训练集上重新训练，保存结果
 ├── results/
 │   ├── models/            训练好的模型（.joblib），不进 git
@@ -31,7 +33,7 @@ project1/
 └── README.zh-CN.md        中文说明
 ```
 
-还没写的：`rf.py`、`gb.py`（随机森林、梯度提升）和 `evaluate.py`（测试集指标与 McNemar 检验）。
+还没写的：`evaluate.py`（测试集指标、McNemar 检验、随机森林在正面和负面评论上的比较），见文末“后续评估”。
 
 ## 环境配置
 
@@ -48,8 +50,9 @@ Linux 和 macOS 上把 `.venv/Scripts/python` 换成 `.venv/bin/python`。
 
 ```bash
 python src/split_data.py     # 1. 生成 train.csv / test.csv
-python src/train.py          # 2. 调参并训练 nb、lr、tree
+python src/train.py          # 2. 调参并训练全部 5 个模型：nb、lr、tree、rf、gb
 python src/train.py nb lr    #    也可以只跑其中几个
+python src/train.py rf gb    #    只跑随机森林和梯度提升
 ```
 
 ### 1. 划分数据集（`split_data.py`）
@@ -85,12 +88,36 @@ python src/train.py nb lr    #    也可以只跑其中几个
 | `nb` | 词袋 → SelectKBest(chi2) → MultinomialNB | k ∈ {10, …, 1000, all}，alpha ∈ {0.1, 0.5, 1} | k = 750，alpha = 0.5 | 0.903 |
 | `lr` | 词袋 → LogisticRegression(l1_ratio = 1) | C 从 10^-2 到 10^2，共 17 个值 | C = 1（1351 个权重中 203 个非零） | 0.915 |
 | `tree` | 词袋 → DecisionTreeClassifier | ccp_alpha ∈ {0, …, 0.05} | ccp_alpha = 0.002（53 个叶节点） | 0.818 |
+| `rf` | 词袋 → RandomForestClassifier | n_estimators ∈ {100, 300, 500}，max_features ∈ {sqrt, 0.1, 0.3} | n_estimators = 300，max_features = sqrt | 0.914 |
+| `gb` | 词袋 → GradientBoostingClassifier | n_estimators ∈ {100, 200}，learning_rate ∈ {0.03, 0.1}，max_depth ∈ {1, 2, 3} | n_estimators = 200，learning_rate = 0.1，max_depth = 3 | 0.909 |
+
+所有模型都用 `GridSearchCV` 在 `d.folds()` 给出的同一组 5 折上调参，并固定 `random_state = 42`，其余参数用库的默认值。随机森林共 9 组参数 × 5 折 = 45 次训练，梯度提升共 12 组 × 5 折 = 60 次，都不含最后在全部训练集上的那一次重新训练。
+
+随机森林和梯度提升的参数含义：
+
+- **n_estimators**：随机森林里是树的数量，梯度提升里是迭代的轮数（每轮加一棵树）。
+- **max_features**：随机森林每次分裂时考虑的特征数。`sqrt` 是特征总数的平方根，0.1 和 0.3 是约 10% 和 30% 的特征。
+- **learning_rate**：梯度提升每加一棵新树时，这棵树的贡献权重。
+- **max_depth**：梯度提升里每棵树的最大深度。
+
+梯度提升选出的参数（200 轮、学习率 0.1、深度 3）落在网格的边界上，扩大网格后交叉验证准确率可能还会提高。如果要调整网格，只能根据训练集上的交叉验证结果来决定。
+
+`cv_{name}.csv` 是交叉验证结果，不能当作测试集准确率。调参图的画法：
+
+- **nb**：横轴是 k，每条曲线对应一个 alpha。
+- **lr**、**tree**：横轴分别是 C 和 ccp_alpha。
+- **rf**：横轴是树的数量，每条曲线对应一个 max_features。
+- **gb**：每个子图对应一个树深度，每条曲线对应一个学习率，横轴是树的数量。
+
+所有图的误差线都是 5 折结果的标准差，不是置信区间。
 
 重要特征的计算方法：
 
 - **nb**：log P(词 | AI) − log P(词 | 人写)，大于 0 偏向 AI，小于 0 偏向人写。
 - **lr**：回归系数，大于 0 偏向 AI，小于 0 偏向人写。
-- **tree**：基尼重要性。
+- **tree**、**rf**、**gb**：`feature_importances_`，即基于不纯度下降的重要性，在所有树上累加。
+
+树模型的重要性只有大小，没有方向，光看分数判断不了一个词偏向 AI 还是人写。相关的词会互相分摊重要性，这种指标本身也有偏差，所以报告里要结合词义和训练数据谨慎解释。
 
 ### 模块用法
 
@@ -107,6 +134,14 @@ vec = TextPreprocessor().make_vec()   # 未拟合的 CountVectorizer，放进 Pi
 ```
 
 验证集划分和交叉验证折都按"标签 × 正负面"（`d.grp`）分层。
+
+每个模型文件（`nb.py`、`lr.py`、`tree.py`、`rf.py`、`gb.py`）都提供同样三个函数，`train.py` 通过 `MODELS` 字典调用它们：
+
+| 函数 | 作用 | 返回值 / 输出 |
+|------|------|--------------|
+| `tune(d)` | 建 Pipeline，交叉验证调参，用最优参数重新训练 | 最终模型、最优参数、调参结果表 |
+| `top(m, n=5)` | 取最重要的 n 个词 | `feature`、`score` 两列（线性模型还有 `class` 列）的 DataFrame |
+| `plot(res, path)` | 画调参曲线 | 保存 PNG 图片 |
 
 ## 文本预处理
 
@@ -152,3 +187,12 @@ vec = TextPreprocessor().make_vec()   # 未拟合的 CountVectorizer，放进 Pi
 - **测试集只用一次**：`ReviewData.load("test")` 只在最终评估 5 个选定模型时调用，调参和模型选择都只用训练集。
 - **按标签 × 正负面分层**：保证训练集和测试集的类别分布一致，同时让测试集中正面、负面评论数量平衡，方便比较模型在两类评论上的准确率。
 - **不使用评分等元数据**：AI 评论的评分分布与真实评论明显不同（负面评论平均 3.0 对 3.7，正面评论平均 8.4 对 9.4）。使用评分会让模型依赖元数据而不是文本，所以只用评论文本作为输入。
+
+## 后续评估
+
+5 个模型都选定之后，`evaluate.py` 还要完成：
+
+1. 在同一批 500 条测试评论上计算 accuracy、precision、recall、F1，以 AI 生成（`label = 1`）为正类。
+2. 朴素贝叶斯和逻辑回归比较；随机森林、梯度提升分别和单棵树比较。用 McNemar 检验，显著性水平 0.01，并报告每次检验的 2×2 表。
+3. 用同一个最终随机森林，分别计算它在正面（POS）和负面（NEG）测试评论上的准确率。两组是不同的评论，要用适合独立样本的检验。
+4. 保存每条测试评论的 ID、真实标签、正负面和各模型的预测，保证不同模型的预测能逐条对齐。

@@ -1,6 +1,3 @@
-# 单棵分类树
-# 词袋 -> DecisionTreeClassifier
-# 调参: 代价复杂度剪枝参数 ccp_alpha (rpart 里的 cp)，5 折交叉验证
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -32,7 +29,6 @@ def tune(d):
 
 
 def top(m, n=5):
-    # 基尼重要性 (每个词带来的不纯度下降之和)
     names = m["vec"].get_feature_names_out()
     imp = m["clf"].feature_importances_
     idx = np.argsort(imp)[::-1][:n]
@@ -42,7 +38,6 @@ def top(m, n=5):
 def plot(res, path):
     b = res.loc[res["acc"].idxmax()]
 
-    # alpha 有 0，用 symlog 画
     plt.figure(figsize=(6, 4))
     plt.errorbar(res["alpha"], res["acc"], yerr=res["sd"], marker="o", ms=4, capsize=3)
     plt.plot(b["alpha"], b["acc"], "r*", ms=14, label=f"selected (ccp_alpha={b['alpha']})")

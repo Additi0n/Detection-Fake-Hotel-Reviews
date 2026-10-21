@@ -1,6 +1,4 @@
-# Lasso 逻辑回归 (L1 正则)
-# 词袋 -> LogisticRegression(penalty="l1")
-# 调参: C = 1/lambda，5 折交叉验证
+
 import warnings
 
 import matplotlib.pyplot as plt
@@ -19,12 +17,10 @@ CS = np.logspace(-2, 2, 17)
 def tune(d):
     pipe = Pipeline([
         ("vec", TextPreprocessor().make_vec()),
-        # penalty 和 l1_ratio 都写上：sklearn < 1.8 只看 penalty（只写 l1_ratio=1 会悄悄变成 L2），
-        # 1.8 以后只看 l1_ratio
+
         ("clf", LogisticRegression(penalty="l1", l1_ratio=1, solver="liblinear", max_iter=5000,
                                    random_state=SEED)),
     ])
-    # penalty 在 1.8 以后会报弃用警告；单进程跑才能把每次拟合的警告都屏蔽掉，LR 很快
     gs = GridSearchCV(pipe, {"clf__C": CS}, cv=d.folds(), scoring="accuracy", n_jobs=1)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
@@ -40,7 +36,6 @@ def tune(d):
 
 
 def top(m, n=5):
-    # 系数 > 0 偏向 AI (label=1)，< 0 偏向人写
     names = m["vec"].get_feature_names_out()
     w = m["clf"].coef_[0]
     idx = np.argsort(w)

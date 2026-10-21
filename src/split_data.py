@@ -1,5 +1,3 @@
-# 取出英文评论，按 75/25 分层划分训练集和测试集
-# 用法: python src/split_data.py
 import os
 import urllib.request
 
@@ -18,15 +16,13 @@ def main():
     df = pd.read_csv(RAW, index_col=0)
     df = df[df["Review_Language"] == "English"].reset_index(drop=True)
 
-    # 评论分成优点(upside)和缺点(downside)两段，可能有一段为空，拼成一个文本
     up = df["Upside_Review"].fillna("").str.strip()
     down = df["Downside_Review"].fillna("").str.strip()
 
-    # 只用文本做特征，评分/酒店/城市只是留着参考
     out = pd.DataFrame({
         "id": df.index,
         "text": (up + " " + down).str.strip(),
-        "label": df["source"].astype(int),  # 1 = AI 生成, 0 = 人写
+        "label": df["source"].astype(int),  
         "sentiment": df["Sentiment"],
         "upside": up,
         "downside": down,
@@ -35,7 +31,6 @@ def main():
         "hotel": df["Hotel Name"],
     })
 
-    # 按 标签 x 正负面 分层，这样测试集里正面和负面评论也是平衡的
     grp = out["label"].astype(str) + "_" + out["sentiment"]
     tr, te = train_test_split(out, test_size=0.25, stratify=grp, random_state=SEED)
 

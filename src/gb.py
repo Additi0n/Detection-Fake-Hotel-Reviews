@@ -1,6 +1,3 @@
-# 梯度提升
-# 词袋 -> GradientBoostingClassifier
-# 调参: 树的数量、学习率和树深度，5 折交叉验证
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -26,7 +23,7 @@ def tune(d):
         "clf__learning_rate": LEARNING_RATES,
         "clf__max_depth": DEPTHS,
     }
-    # 并行交叉验证；refit=True 会在完整训练集上重新训练最优模型
+
     gs = GridSearchCV(pipe, grid, cv=d.folds(), scoring="accuracy",
                       n_jobs=-1, refit=True, verbose=1, error_score="raise")
     gs.fit(d.X, d.y)
@@ -43,7 +40,6 @@ def tune(d):
 
 
 def top(m, n=5):
-    # 不纯度下降重要性：只有大小，不表示偏向 AI 还是人写
     names = m["vec"].get_feature_names_out()
     imp = m["clf"].feature_importances_
     idx = np.argsort(imp)[::-1][:n]
@@ -52,8 +48,6 @@ def top(m, n=5):
 
 def plot(res, path):
     b = res.loc[res["acc"].idxmax()]
-
-    # 每个子图固定树深度，每条曲线固定学习率
     fig, axes = plt.subplots(1, len(DEPTHS), figsize=(10, 3.5), sharey=True)
     for ax, depth in zip(axes, DEPTHS):
         sub = res[res["max_depth"] == depth]

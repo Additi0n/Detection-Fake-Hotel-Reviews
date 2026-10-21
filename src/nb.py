@@ -1,6 +1,4 @@
-# 多项式朴素贝叶斯
-# 词袋 -> 卡方检验选前 k 个词 -> MultinomialNB
-# 调参: k 和平滑参数 alpha，5 折交叉验证
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -36,8 +34,6 @@ def tune(d):
 
 
 def top(m, n=5):
-    # 两类的对数条件概率之差 log P(w|AI) - log P(w|human)
-    # 大于 0 偏向 AI，小于 0 偏向人写
     names = m["vec"].get_feature_names_out()[m["sel"].get_support()]
     lp = m["clf"].feature_log_prob_
     s = lp[1] - lp[0]
@@ -58,7 +54,6 @@ def plot(res, path):
     b = res.loc[res["acc"].idxmax()]
 
     plt.figure(figsize=(6, 4))
-    # 三个 alpha 的结果几乎重合，左右错开一点
     for a, dx in zip(ALPHAS, [0.94, 1.0, 1.06]):
         r = res[(res["alpha"] == a) & (res["k"] != -1)]
         plt.errorbar(r["k"] * dx, r["acc"], yerr=r["sd"], marker="o", ms=4, capsize=2, label=f"alpha={a}")

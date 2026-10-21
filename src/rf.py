@@ -1,6 +1,3 @@
-# 随机森林
-# 词袋 -> RandomForestClassifier
-# 调参: 树的数量和每次分裂考虑的特征数量，5 折交叉验证
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd

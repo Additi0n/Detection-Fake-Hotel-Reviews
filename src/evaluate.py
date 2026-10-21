@@ -12,6 +12,7 @@ import joblib
 import pandas as pd
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.metrics import precision_score, recall_score, f1_score
+from scipy.stats import fisher_exact
 from statsmodels.stats.contingency_tables import mcnemar
 
 from config import MOD_DIR, TAB_DIR
@@ -121,10 +122,54 @@ def main():
     tests = pd.DataFrame(test_rows)
     tests.to_csv(os.path.join(TAB_DIR, "mcnemar_tests.csv"), index=False)
 
+    # 比较随机森林在正面评论和负面评论上的表现。
+    # 两组评论互相独立，所以这里使用 Fisher 精确检验，而不是 McNemar 检验。
+    sentiment_rows = []
+    correct_counts = {}
+
+    for sentiment in ["POS", "NEG"]:
+        use = predictions["sentiment"] == sentiment
+        y_part = predictions.loc[use, "label"].to_numpy()
+        pred_part = predictions.loc[use, "rf"].to_numpy()
+
+        row = {"sentiment": sentiment, "n": int(use.sum())}
+        row.update(model_metrics(y_part, pred_part))
+        sentiment_rows.append(row)
+
+        correct = int((y_part == pred_part).sum())
+        wrong = int((y_part != pred_part).sum())
+        correct_counts[sentiment] = [correct, wrong]
+
+    sentiment_metrics = pd.DataFrame(sentiment_rows)
+    sentiment_metrics.to_csv(
+        os.path.join(TAB_DIR, "rf_by_sentiment.csv"), index=False
+    )
+
+    # 行分别是 POS 和 NEG，列分别是预测正确和预测错误。
+    fisher_table = [correct_counts["POS"], correct_counts["NEG"]]
+    odds_ratio, fisher_p = fisher_exact(fisher_table, alternative="two-sided")
+
+    fisher_result = pd.DataFrame([{
+        "pos_correct": fisher_table[0][0],
+        "pos_wrong": fisher_table[0][1],
+        "neg_correct": fisher_table[1][0],
+        "neg_wrong": fisher_table[1][1],
+        "odds_ratio": odds_ratio,
+        "p_value": fisher_p,
+        "significant_at_0.01": fisher_p < 0.01,
+    }])
+    fisher_result.to_csv(
+        os.path.join(TAB_DIR, "rf_sentiment_fisher.csv"), index=False
+    )
+
     print("\nFinal test-set metrics")
     print(metrics.round(4).to_string(index=False))
     print("\nMcNemar tests (alpha = 0.01)")
     print(tests.to_string(index=False))
+    print("\nRandom forest by sentiment")
+    print(sentiment_metrics.round(4).to_string(index=False))
+    print("\nFisher exact test: positive vs negative accuracy")
+    print(fisher_result.to_string(index=False))
     print("\nResults saved in:", TAB_DIR)
 
 

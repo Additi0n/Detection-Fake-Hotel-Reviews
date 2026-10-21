@@ -1,0 +1,4 @@
+model_a,model_b,both_correct,a_correct_b_wrong,a_wrong_b_correct,both_wrong,statistic,p_value,significant_at_0.01
+nb,lr,413,31,41,15,31.0,0.2887842804141049,False
+tree,rf,393,15,67,25,15.0,5.2573169769006436e-09,True
+tree,gb,398,10,62,30,10.0,2.6890686575861277e-10,True

@@ -86,7 +86,7 @@ python src/train.py rf gb    #    只跑随机森林和梯度提升
 | 模型 | Pipeline | 参数网格 | 选出的参数 | 交叉验证准确率 |
 |------|----------|----------|-----------|----------------|
 | `nb` | 词袋 → SelectKBest(chi2) → MultinomialNB | k ∈ {10, …, 1000, all}，alpha ∈ {0.1, 0.5, 1} | k = 750，alpha = 0.5 | 0.903 |
-| `lr` | 词袋 → LogisticRegression(l1_ratio = 1) | C 从 10^-2 到 10^2，共 17 个值 | C = 1（1351 个权重中 203 个非零） | 0.915 |
+| `lr` | 词袋 → LogisticRegression(penalty = "l1") | C 从 10^-2 到 10^2，共 17 个值 | C = 1（1351 个权重中 203 个非零） | 0.915 |
 | `tree` | 词袋 → DecisionTreeClassifier | ccp_alpha ∈ {0, …, 0.05} | ccp_alpha = 0.002（53 个叶节点） | 0.818 |
 | `rf` | 词袋 → RandomForestClassifier | n_estimators ∈ {100, 300, 500}，max_features ∈ {sqrt, 0.1, 0.3} | n_estimators = 300，max_features = sqrt | 0.914 |
 | `gb` | 词袋 → GradientBoostingClassifier | n_estimators ∈ {100, 200}，learning_rate ∈ {0.03, 0.1}，max_depth ∈ {1, 2, 3} | n_estimators = 200，learning_rate = 0.1，max_depth = 3 | 0.909 |
@@ -109,7 +109,9 @@ python src/train.py rf gb    #    只跑随机森林和梯度提升
 - **rf**：横轴是树的数量，每条曲线对应一个 max_features。
 - **gb**：每个子图对应一个树深度，每条曲线对应一个学习率，横轴是树的数量。
 
-所有图的误差线都是 5 折结果的标准差，不是置信区间。
+所有图的误差线都是 5 折结果的标准差，不是置信区间；红色星号是最终选中的参数。参数几乎重合的曲线（nb 的三个 alpha、rf 的三种 max_features）在横轴上稍微错开画，误差线才不会叠在一起。
+
+`lr.py` 同时写了 `penalty="l1"` 和 `l1_ratio=1`：sklearn 1.8 以前只认 `penalty`，只写 `l1_ratio=1` 时会悄悄训练成 L2 逻辑回归。
 
 重要特征的计算方法：
 

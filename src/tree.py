@@ -40,12 +40,18 @@ def top(m, n=5):
 
 
 def plot(res, path):
+    b = res.loc[res["acc"].idxmax()]
+
     # alpha 有 0，用 symlog 画
     plt.figure(figsize=(6, 4))
-    plt.errorbar(res["alpha"], res["acc"], yerr=res["sd"], marker="o", capsize=3)
+    plt.errorbar(res["alpha"], res["acc"], yerr=res["sd"], marker="o", ms=4, capsize=3)
+    plt.plot(b["alpha"], b["acc"], "r*", ms=14, label=f"selected (ccp_alpha={b['alpha']})")
     plt.xscale("symlog", linthresh=0.0005)
+    plt.xticks([0, 0.001, 0.01, 0.05], ["0", "0.001", "0.01", "0.05"])
+    plt.minorticks_off()
     plt.xlabel("ccp_alpha")
     plt.ylabel("5-fold CV accuracy")
+    plt.legend(loc="lower left")
     plt.tight_layout()
     plt.savefig(path, dpi=150)
     plt.close()

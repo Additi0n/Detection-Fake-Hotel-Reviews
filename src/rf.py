@@ -48,14 +48,19 @@ def top(m, n=5):
 
 
 def plot(res, path):
-    # 每条曲线固定 max_features，只改变树的数量
-    plt.figure(figsize=(7, 4))
-    for f in res["max_features"].unique():
-        r = res[res["max_features"] == f].sort_values("n_estimators")
-        plt.errorbar(r["n_estimators"], r["acc"], yerr=r["sd"], marker="o", capsize=3, label=f"max_features={f}")
+    b = res.loc[res["acc"].idxmax()]
+
+    # 每条曲线固定 max_features，只改变树的数量；左右错开一点，误差线才不重叠
+    plt.figure(figsize=(6, 4))
+    for f, dx in zip(MAX_FEATURES, [-12, 0, 12]):
+        r = res[res["max_features"].astype(str) == str(f)].sort_values("n_estimators")
+        plt.errorbar(r["n_estimators"] + dx, r["acc"], yerr=r["sd"], marker="o", ms=4, capsize=3,
+                     label=f"max_features={f}")
+    plt.plot(b["n_estimators"], b["acc"], "r*", ms=14,
+             label=f"selected ({b['n_estimators']} trees, {b['max_features']})")
+    plt.xticks(N_TREES)
     plt.xlabel("Number of trees")
     plt.ylabel("5-fold CV accuracy")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(path, dpi=150)
+    plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=2)
+    plt.savefig(path, dpi=150, bbox_inches="tight")
     plt.close()

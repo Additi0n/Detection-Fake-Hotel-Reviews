@@ -85,10 +85,14 @@ The test set is not used here.
 | model | pipeline | grid | selected | CV accuracy |
 |-------|----------|------|----------|-------------|
 | `nb` | bag of words → SelectKBest(chi2) → MultinomialNB | k ∈ {10, …, 1000, all}, alpha ∈ {0.1, 0.5, 1} | k = 750, alpha = 0.5 | 0.903 |
-| `lr` | bag of words → LogisticRegression(l1_ratio = 1) | C ∈ 10^-2 … 10^2 (17 values) | C = 1 (203 of 1351 weights non-zero) | 0.915 |
+| `lr` | bag of words → LogisticRegression(penalty = "l1") | C ∈ 10^-2 … 10^2 (17 values) | C = 1 (203 of 1351 weights non-zero) | 0.915 |
 | `tree` | bag of words → DecisionTreeClassifier | ccp_alpha ∈ {0, …, 0.05} | ccp_alpha = 0.002 (53 leaves) | 0.818 |
 | `rf` | bag of words → RandomForestClassifier | n_estimators ∈ {100, 300, 500}, max_features ∈ {sqrt, 0.1, 0.3} | n_estimators = 300, max_features = sqrt | 0.9140 |
 | `gb` | bag of words → GradientBoostingClassifier | n_estimators ∈ {100, 200}, learning_rate ∈ {0.03, 0.1}, max_depth ∈ {1, 2, 3} | n_estimators = 200, learning_rate = 0.1, max_depth = 3 | 0.9093 |
+
+In the tuning plots the error bars are the standard deviation over the 5 folds and the red star marks the selected setting. Curves that nearly coincide (the three alphas in nb, the three max_features values in rf) are shifted slightly along the x axis so their error bars do not overlap.
+
+`lr.py` sets both `penalty="l1"` and `l1_ratio=1`. Before scikit-learn 1.8 only `penalty` is used, and `l1_ratio=1` alone silently gives an L2 model.
 
 Top features:
 

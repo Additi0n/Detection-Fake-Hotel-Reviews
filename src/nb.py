@@ -55,19 +55,19 @@ def plot(res, path):
     res = res.copy()
     res["k"] = res["k"].replace("all", -1)
     res = res.sort_values("k")
-    n_all = len(res[res["k"] == -1])
+    b = res.loc[res["acc"].idxmax()]
 
     plt.figure(figsize=(6, 4))
-    for a in ALPHAS:
+    # 三个 alpha 的结果几乎重合，左右错开一点
+    for a, dx in zip(ALPHAS, [0.94, 1.0, 1.06]):
         r = res[(res["alpha"] == a) & (res["k"] != -1)]
-        plt.errorbar(r["k"], r["acc"], yerr=r["sd"], marker="o", capsize=3, label=f"alpha={a}")
-    if n_all:
-        best_all = res[res["k"] == -1]["acc"].max()
-        plt.axhline(best_all, color="gray", ls="--", label="all features")
+        plt.errorbar(r["k"] * dx, r["acc"], yerr=r["sd"], marker="o", ms=4, capsize=2, label=f"alpha={a}")
+    plt.axhline(res[res["k"] == -1]["acc"].max(), color="gray", ls="--", label="all words")
+    plt.plot(b["k"], b["acc"], "r*", ms=14, label=f"selected (k={b['k']}, alpha={b['alpha']})")
     plt.xscale("log")
     plt.xlabel("k (number of selected words)")
     plt.ylabel("5-fold CV accuracy")
-    plt.legend()
+    plt.legend(loc="lower right")
     plt.tight_layout()
     plt.savefig(path, dpi=150)
     plt.close()

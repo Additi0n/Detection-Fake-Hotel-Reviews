@@ -22,7 +22,7 @@ project1/
 │   ├── tree.py            single classification tree (cost-complexity pruning)
 │   ├── rf.py              random forest (number of trees and feature subsampling)
 │   ├── gb.py              gradient boosting (number of stages, learning rate and tree depth)
-│   ├── compare_preprocessing.py  preprocessing comparison (report Appendix C)
+│   ├── compare_preprocessing.py  preprocessing comparison (report Appendix B)
 │   ├── train.py           tunes the models, refits on the full training set, saves results
 │   └── evaluate.py        evaluates the fitted models on the final test set
 ├── results/
@@ -53,8 +53,26 @@ python src/train.py          # 2. tune and fit all five registered models, gb, l
 python src/evaluate.py       # 3. evaluate the saved models on the final test set
 python src/train.py nb lr    #    train only selected models
 python src/train.py rf gb    #    train random forest and gradient boosting only
-python src/compare_preprocessing.py   # optional: preprocessing comparison (Appendix C of the report)
+python src/compare_preprocessing.py   # optional: preprocessing comparison (Appendix B of the report)
 ```
+
+### Which script produces which result in the report
+
+| Report | Content | Script | Output file |
+|--------|---------|--------|-------------|
+| Table 1 | train/test split | `split_data.py` | `results/tables/split_summary.csv` |
+| Table 2, Table 9 | selected hyperparameters, CV accuracy, searched grids | `train.py` | `results/tables/cv_{name}.csv` |
+| Figures 1–3 | cross-validation curves | `train.py` | `results/figures/cv_{name}.png` |
+| Table 3 | test accuracy, precision, recall, F1 | `evaluate.py` | `results/tables/test_metrics.csv` |
+| Table 4 | McNemar 2×2 tables and p-values | `evaluate.py` | `results/tables/mcnemar_tests.csv` |
+| Table 5 | random forest by sentiment | `evaluate.py` | `results/tables/rf_by_sentiment.csv` |
+| Table 6 | Fisher 2×2 table, odds ratio, p-value | `evaluate.py` | `results/tables/rf_sentiment_fisher.csv` |
+| Table 7 | top terms of naive Bayes and logistic regression | `train.py` | `results/tables/feat_nb.csv`, `feat_lr.csv` |
+| Table 8 | top terms of the tree models | `train.py` | `results/tables/feat_tree.csv`, `feat_rf.csv`, `feat_gb.csv` |
+| Table 10 | preprocessing comparison | `compare_preprocessing.py` | `results/tables/preprocessing.csv` |
+
+`evaluate.py` also writes per-model confusion matrices (`confusion_{name}.csv`) and every test prediction (`test_predictions.csv`).
+
 
 ### 1. Data split (`split_data.py`)
 

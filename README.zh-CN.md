@@ -22,7 +22,7 @@ project1/
 │   ├── tree.py            单棵分类树（代价复杂度剪枝）
 │   ├── rf.py              随机森林（树的数量、每次分裂考虑的特征数）
 │   ├── gb.py              梯度提升（树的数量、学习率、树深度）
-│   ├── compare_preprocessing.py  比较不同预处理设置（报告附录 C）
+│   ├── compare_preprocessing.py  比较不同预处理设置（报告附录 B）
 │   ├── train.py           调参，用最优参数在全部训练集上重新训练，保存结果
 │   └── evaluate.py        在最终测试集上评估已训练的模型
 ├── results/
@@ -54,8 +54,26 @@ python src/train.py          # 2. 调参并训练全部 5 个模型：nb、lr、
 python src/evaluate.py       # 3. 在最终测试集上评估保存的模型
 python src/train.py nb lr    #    也可以只跑其中几个
 python src/train.py rf gb    #    只跑随机森林和梯度提升
-python src/compare_preprocessing.py   # 可选：预处理设置比较（报告附录 C）
+python src/compare_preprocessing.py   # 可选：预处理设置比较（报告附录 B）
 ```
+
+### 报告中各结果由哪个脚本生成
+
+| 报告位置 | 内容 | 脚本 | 输出文件 |
+|----------|------|------|----------|
+| 表 1 | 训练集 / 测试集划分 | `split_data.py` | `results/tables/split_summary.csv` |
+| 表 2、表 9 | 选中的超参数、交叉验证准确率、参数网格 | `train.py` | `results/tables/cv_{name}.csv` |
+| 图 1–3 | 交叉验证调参曲线 | `train.py` | `results/figures/cv_{name}.png` |
+| 表 3 | 测试集 accuracy、precision、recall、F1 | `evaluate.py` | `results/tables/test_metrics.csv` |
+| 表 4 | McNemar 2×2 表和 p 值 | `evaluate.py` | `results/tables/mcnemar_tests.csv` |
+| 表 5 | 随机森林按正负面的表现 | `evaluate.py` | `results/tables/rf_by_sentiment.csv` |
+| 表 6 | Fisher 2×2 表、优势比和 p 值 | `evaluate.py` | `results/tables/rf_sentiment_fisher.csv` |
+| 表 7 | 朴素贝叶斯和逻辑回归的重要词 | `train.py` | `results/tables/feat_nb.csv`、`feat_lr.csv` |
+| 表 8 | 三个树模型的重要词 | `train.py` | `results/tables/feat_tree.csv`、`feat_rf.csv`、`feat_gb.csv` |
+| 表 10 | 预处理设置比较 | `compare_preprocessing.py` | `results/tables/preprocessing.csv` |
+
+`evaluate.py` 还会输出每个模型的混淆矩阵（`confusion_{name}.csv`）和所有测试集预测（`test_predictions.csv`）。
+
 
 ### 1. 划分数据集（`split_data.py`）
 

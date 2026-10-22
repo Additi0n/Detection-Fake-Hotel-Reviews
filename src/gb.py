@@ -8,9 +8,9 @@ from sklearn.pipeline import Pipeline
 from config import SEED
 from preprocessing import TextPreprocessor
 
-N_TREES = [100, 200]
-LEARNING_RATES = [0.03, 0.1]
-DEPTHS = [1, 2, 3]
+N_TREES = [100, 200, 400, 800]
+LEARNING_RATES = [0.03, 0.1, 0.3]
+DEPTHS = [1, 2, 3, 4, 5]
 
 
 def tune(d):
@@ -48,7 +48,7 @@ def top(m, n=5):
 
 def plot(res, path):
     b = res.loc[res["acc"].idxmax()]
-    fig, axes = plt.subplots(1, len(DEPTHS), figsize=(10, 3.5), sharey=True)
+    fig, axes = plt.subplots(1, len(DEPTHS), figsize=(13, 3.3), sharey=True)
     for ax, depth in zip(axes, DEPTHS):
         sub = res[res["max_depth"] == depth]
         for rate in LEARNING_RATES:
@@ -58,12 +58,13 @@ def plot(res, path):
         if depth == b["max_depth"]:
             ax.plot(b["n_estimators"], b["acc"], "r*", ms=14, label="selected")
         ax.set_title(f"max_depth={depth}")
-        ax.set_xticks(N_TREES)
-        ax.set_xlim(N_TREES[0] - 25, N_TREES[-1] + 25)
+        ax.set_xscale("log")
+        ax.set_xticks(N_TREES, [str(n) for n in N_TREES])
+        ax.minorticks_off()
         ax.set_xlabel("Number of trees")
     axes[0].set_ylabel("5-fold CV accuracy")
     h, l = axes[list(DEPTHS).index(b["max_depth"])].get_legend_handles_labels()
-    fig.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, 0.02), ncol=3)
+    fig.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, 0.02), ncol=4)
     fig.tight_layout()
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)

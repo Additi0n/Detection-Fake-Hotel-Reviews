@@ -22,6 +22,7 @@ project1/
 │   ├── tree.py            单棵分类树（代价复杂度剪枝）
 │   ├── rf.py              随机森林（树的数量、每次分裂考虑的特征数）
 │   ├── gb.py              梯度提升（树的数量、学习率、树深度）
+│   ├── compare_preprocessing.py  比较不同预处理设置（报告附录 C）
 │   ├── train.py           调参，用最优参数在全部训练集上重新训练，保存结果
 │   └── evaluate.py        在最终测试集上评估已训练的模型
 ├── results/
@@ -53,6 +54,7 @@ python src/train.py          # 2. 调参并训练全部 5 个模型：nb、lr、
 python src/evaluate.py       # 3. 在最终测试集上评估保存的模型
 python src/train.py nb lr    #    也可以只跑其中几个
 python src/train.py rf gb    #    只跑随机森林和梯度提升
+python src/compare_preprocessing.py   # 可选：预处理设置比较（报告附录 C）
 ```
 
 ### 1. 划分数据集（`split_data.py`）
@@ -88,8 +90,8 @@ python src/train.py rf gb    #    只跑随机森林和梯度提升
 | `nb` | 词袋 → SelectKBest(chi2) → MultinomialNB | k ∈ {10, …, 1000, all}，alpha ∈ {0.1, 0.5, 1} | k = 750，alpha = 0.5 | 0.903 |
 | `lr` | 词袋 → LogisticRegression(penalty = "l1") | C 从 10^-2 到 10^2，共 17 个值 | C = 1（1351 个权重中 203 个非零） | 0.915 |
 | `tree` | 词袋 → DecisionTreeClassifier | ccp_alpha ∈ {0, …, 0.05} | ccp_alpha = 0.002（53 个叶节点） | 0.818 |
-| `rf` | 词袋 → RandomForestClassifier | n_estimators ∈ {100, 300, 500}，max_features ∈ {sqrt, 0.1, 0.3} | n_estimators = 300，max_features = sqrt | 0.914 |
-| `gb` | 词袋 → GradientBoostingClassifier | n_estimators ∈ {100, 200}，learning_rate ∈ {0.03, 0.1}，max_depth ∈ {1, 2, 3} | n_estimators = 200，learning_rate = 0.1，max_depth = 3 | 0.909 |
+| `rf` | 词袋 → RandomForestClassifier | n_estimators ∈ {100, 300, 500, 1000}，max_features ∈ {1, 3, log2, sqrt, 0.1, 0.3} | n_estimators = 1000，max_features = 3 | 0.919 |
+| `gb` | 词袋 → GradientBoostingClassifier | n_estimators ∈ {100, 200, 400, 800}，learning_rate ∈ {0.03, 0.1, 0.3}，max_depth ∈ {1, …, 5} | n_estimators = 800，learning_rate = 0.1，max_depth = 2 | 0.923 |
 
 所有模型都用 `GridSearchCV` 在 `d.folds()` 给出的同一组 5 折上调参，并固定 `random_state = 42`，其余参数用库的默认值。随机森林共 9 组参数 × 5 折 = 45 次训练，梯度提升共 12 组 × 5 折 = 60 次，都不含最后在全部训练集上的那一次重新训练。
 
@@ -100,7 +102,7 @@ python src/train.py rf gb    #    只跑随机森林和梯度提升
 - **learning_rate**：梯度提升每加一棵新树时，这棵树的贡献权重。
 - **max_depth**：梯度提升里每棵树的最大深度。
 
-梯度提升选出的参数（200 轮、学习率 0.1、深度 3）落在网格的边界上，扩大网格后交叉验证准确率可能还会提高。如果要调整网格，只能根据训练集上的交叉验证结果来决定。
+rf 和 gb 最初的网格选出的值都在网格边界上，所以两个网格都朝边界方向扩大，直到交叉验证准确率不再提高。现在 max_features、learning_rate 和 max_depth 选中的值都在网格内部。树的数量和迭代轮数选的仍是最大值，但准确率已经进入平台区：rf 从 300 棵到 1000 棵树准确率最多只变 0.2 个百分点，gb 在学习率 0.3 时 200 到 400 轮就达到峰值，之后开始下降。调整网格只依据训练集上的交叉验证结果。
 
 `cv_{name}.csv` 是交叉验证结果，不能当作测试集准确率。调参图的画法：
 
@@ -154,24 +156,24 @@ vec = TextPreprocessor().make_vec()   # 未拟合的 CountVectorizer，放进 Pi
 
 向量化器是每个 Pipeline 的第一步，所以交叉验证时每一折只用自己的训练部分建词表。
 
-其他设置可以用来做比较，例如 `TextPreprocessor(stop=True, stem=True, ngram=(1, 2), min_df=10)`。确定默认设置之前，我们在训练集上用 5 折交叉验证粗略比较过几种设置（准确率，模型未调参）：
+其他设置可以用来做比较，例如 `TextPreprocessor(stop=True, stem=True, ngram=(1, 2), min_df=10)`。`python src/compare_preprocessing.py` 会在训练集上用 5 折交叉验证比较 7 种设置，结果写到 `results/tables/preprocessing.csv`。它和 `train.py` 用同一组折；朴素贝叶斯用 alpha = 1、不做特征选择；L1 逻辑回归的 C 用内层 5 折交叉验证选（`LogisticRegressionCV`）。表中是平均准确率，括号里是各折的标准差：
 
 | 设置 | 特征数 | 朴素贝叶斯 | Lasso 逻辑回归 |
 |------|--------|-----------|----------------|
-| 不删稀疏词（min_df = 1） | 4737 | 0.894 | 0.911 |
-| **采用的设置（min_df = 5）** | **1351** | **0.901** | **0.907** |
-| min_df = 10 | 845 | 0.895 | 0.907 |
-| 去停用词 | 1138 | 0.897 | 0.895 |
-| 词干提取 | 1186 | 0.895 | 0.905 |
-| 去停用词 + 词干 | 1003 | 0.885 | 0.902 |
-| 单词 + 二元词组 | 3665 | 0.908 | 0.909 |
+| 不删稀疏词（min_df = 1） | 4737 | 0.894 (0.013) | 0.909 (0.022) |
+| **采用的设置（min_df = 5）** | **1351** | **0.901 (0.010)** | **0.899 (0.022)** |
+| min_df = 10 | 845 | 0.895 (0.010) | 0.907 (0.019) |
+| 去停用词 | 1138 | 0.897 (0.016) | 0.893 (0.013) |
+| 词干提取 | 1186 | 0.895 (0.013) | 0.905 (0.020) |
+| 去停用词 + 词干 | 1003 | 0.885 (0.013) | 0.901 (0.020) |
+| 单词 + 二元词组 | 3665 | 0.908 (0.011) | 0.906 (0.022) |
 
-各设置之间的差别都在 1 到 2 个百分点以内，和交叉验证本身的波动差不多。选择理由：
+所有设置的准确率都在 0.885 到 0.909 之间，大部分差距小于一个交叉验证标准差，没有哪种设置明显更好。所以最终选择主要看可解释性和词表大小：
 
-- **保留停用词**：去掉停用词后 Lasso 的准确率下降约 1 个百分点。I、we、the 这类虚词反映写作风格，而人写和 AI 生成的评论恰好在风格上不同。
-- **不做词干提取**：准确率没有提高，而且词干（如 servic、lobbi）会让重要特征更难解释。
-- **min_df = 5**：特征数从 4737 降到 1351，准确率基本不变。
-- **只用单词**：加入二元词组后特征数接近原来的 3 倍，提升也不明显。
+- **保留停用词**：去掉停用词后两个模型都略有下降（朴素贝叶斯 0.901 → 0.897，逻辑回归 0.899 → 0.893）。I、we、the 这类虚词反映写作风格。
+- **不做词干提取**：准确率没有稳定的提高，而且词干（如 servic、lobbi）会让重要特征更难解释。
+- **min_df = 5**：特征数从 4737 降到 1351；朴素贝叶斯高 0.7 个百分点，逻辑回归低 1.0 个百分点，都在交叉验证的波动范围内。
+- **只用单词**：加入二元词组后特征数接近原来的 3 倍，提升最多 0.7 个百分点。
 
 ## 数据列说明（processed 文件）
 

@@ -22,6 +22,7 @@ project1/
 │   ├── tree.py            single classification tree (cost-complexity pruning)
 │   ├── rf.py              random forest (number of trees and feature subsampling)
 │   ├── gb.py              gradient boosting (number of stages, learning rate and tree depth)
+│   ├── compare_preprocessing.py  preprocessing comparison (report Appendix C)
 │   ├── train.py           tunes the models, refits on the full training set, saves results
 │   └── evaluate.py        evaluates the fitted models on the final test set
 ├── results/
@@ -52,6 +53,7 @@ python src/train.py          # 2. tune and fit all five registered models, gb, l
 python src/evaluate.py       # 3. evaluate the saved models on the final test set
 python src/train.py nb lr    #    train only selected models
 python src/train.py rf gb    #    train random forest and gradient boosting only
+python src/compare_preprocessing.py   # optional: preprocessing comparison (Appendix C of the report)
 ```
 
 ### 1. Data split (`split_data.py`)
@@ -87,8 +89,10 @@ The test set is not used here.
 | `nb` | bag of words → SelectKBest(chi2) → MultinomialNB | k ∈ {10, …, 1000, all}, alpha ∈ {0.1, 0.5, 1} | k = 750, alpha = 0.5 | 0.903 |
 | `lr` | bag of words → LogisticRegression(penalty = "l1") | C ∈ 10^-2 … 10^2 (17 values) | C = 1 (203 of 1351 weights non-zero) | 0.915 |
 | `tree` | bag of words → DecisionTreeClassifier | ccp_alpha ∈ {0, …, 0.05} | ccp_alpha = 0.002 (53 leaves) | 0.818 |
-| `rf` | bag of words → RandomForestClassifier | n_estimators ∈ {100, 300, 500}, max_features ∈ {sqrt, 0.1, 0.3} | n_estimators = 300, max_features = sqrt | 0.9140 |
-| `gb` | bag of words → GradientBoostingClassifier | n_estimators ∈ {100, 200}, learning_rate ∈ {0.03, 0.1}, max_depth ∈ {1, 2, 3} | n_estimators = 200, learning_rate = 0.1, max_depth = 3 | 0.9093 |
+| `rf` | bag of words → RandomForestClassifier | n_estimators ∈ {100, 300, 500, 1000}, max_features ∈ {1, 3, log2, sqrt, 0.1, 0.3} | n_estimators = 1000, max_features = 3 | 0.919 |
+| `gb` | bag of words → GradientBoostingClassifier | n_estimators ∈ {100, 200, 400, 800}, learning_rate ∈ {0.03, 0.1, 0.3}, max_depth ∈ {1, …, 5} | n_estimators = 800, learning_rate = 0.1, max_depth = 2 | 0.923 |
+
+The first rf and gb grids selected values on their edge, so both grids were extended in that direction until CV accuracy stopped improving. max_features, learning_rate and max_depth are now selected inside the grid. The number of trees and stages is the largest value searched, but accuracy has levelled off: rf changes by at most 0.2 points between 300 and 1000 trees, and gb at learning rate 0.3 peaks at 200–400 stages.
 
 In the tuning plots the error bars are the standard deviation over the 5 folds and the red star marks the selected setting. Curves that nearly coincide (the three alphas in nb, the three max_features values in rf) are shifted slightly along the x axis so their error bars do not overlap.
 
@@ -142,24 +146,24 @@ Splits and folds are stratified on label × sentiment (`d.grp`).
 
 The vectorizer is the first step of every pipeline, so in CV each fold builds its vocabulary from its own training part only.
 
-Other settings are available for comparison, e.g. `TextPreprocessor(stop=True, stem=True, ngram=(1, 2), min_df=10)`. Before settling on the default, we compared them with 5-fold CV accuracy on the training set (untuned models):
+Other settings are available for comparison, e.g. `TextPreprocessor(stop=True, stem=True, ngram=(1, 2), min_df=10)`. `python src/compare_preprocessing.py` compares seven settings with 5-fold CV accuracy on the training set and writes `results/tables/preprocessing.csv`. It uses the same folds as `train.py`, naive Bayes with alpha = 1 and no feature selection, and L1 logistic regression whose C is chosen by an inner 5-fold CV (`LogisticRegressionCV`). Mean accuracy, with the sd over folds in parentheses:
 
 | setting | features | naive Bayes | Lasso LR |
 |---------|----------|-------------|----------|
-| no sparse-term removal (min_df = 1) | 4737 | 0.894 | 0.911 |
-| **chosen setting (min_df = 5)** | **1351** | **0.901** | **0.907** |
-| min_df = 10 | 845 | 0.895 | 0.907 |
-| stop words removed | 1138 | 0.897 | 0.895 |
-| stemming | 1186 | 0.895 | 0.905 |
-| stop words removed + stemming | 1003 | 0.885 | 0.902 |
-| unigrams + bigrams | 3665 | 0.908 | 0.909 |
+| no sparse-term removal (min_df = 1) | 4737 | 0.894 (0.013) | 0.909 (0.022) |
+| **chosen setting (min_df = 5)** | **1351** | **0.901 (0.010)** | **0.899 (0.022)** |
+| min_df = 10 | 845 | 0.895 (0.010) | 0.907 (0.019) |
+| stop words removed | 1138 | 0.897 (0.016) | 0.893 (0.013) |
+| stemming | 1186 | 0.895 (0.013) | 0.905 (0.020) |
+| stop words removed + stemming | 1003 | 0.885 (0.013) | 0.901 (0.020) |
+| unigrams + bigrams | 3665 | 0.908 (0.011) | 0.906 (0.022) |
 
-All settings are within 1–2 percentage points of each other, about the size of the CV noise. Reasons for the choice:
+All settings lie between 0.885 and 0.909, and most differences are smaller than one CV standard deviation. No setting is clearly best, so the remaining choice rests on interpretability and vocabulary size:
 
-- **Keep stop words**: removing them costs Lasso about 1 point. Function words such as I, we and the carry writing style, and style is what separates human from AI reviews.
-- **No stemming**: no gain in accuracy, and stems such as servic or lobbi make the top features harder to interpret.
-- **min_df = 5**: cuts the vocabulary from 4737 to 1351 terms at no cost in accuracy.
-- **Unigrams only**: bigrams nearly triple the number of features for no clear gain.
+- **Keep stop words**: removing them lowers both models slightly (NB 0.901 → 0.897, LR 0.899 → 0.893). Function words such as I, we and the carry writing style.
+- **No stemming**: no consistent gain, and stems such as servic or lobbi make the top features harder to interpret.
+- **min_df = 5**: cuts the vocabulary from 4737 to 1351 terms; NB gains 0.7 points and LR loses 1.0 point, both within the CV noise.
+- **Unigrams only**: bigrams nearly triple the number of features for at most 0.7 points.
 
 ## Columns in the processed files
 

@@ -22,7 +22,8 @@ project1/
 │   ├── tree.py            single classification tree (cost-complexity pruning)
 │   ├── rf.py              random forest (number of trees and feature subsampling)
 │   ├── gb.py              gradient boosting (number of stages, learning rate and tree depth)
-│   └── train.py           tunes the models, refits on the full training set, saves results
+│   ├── train.py           tunes the models, refits on the full training set, saves results
+│   └── evaluate.py        evaluates the fitted models on the final test set
 ├── results/
 │   ├── models/            fitted models (.joblib), not in git
 │   ├── tables/            CSV output used for the report tables
@@ -31,8 +32,6 @@ project1/
 ├── requirements.txt
 └── README.md
 ```
-
-Still to do: `evaluate.py` for final test-set metrics, McNemar comparisons and the random forest's positive-versus-negative review analysis.
 
 ## Setup
 
@@ -50,6 +49,7 @@ On Linux/macOS, use `.venv/bin/python` in place of `.venv/Scripts/python`.
 ```bash
 python src/split_data.py     # 1. make train.csv / test.csv
 python src/train.py          # 2. tune and fit all five registered models, gb, lr, nb, rf, tree
+python src/evaluate.py       # 3. evaluate the saved models on the final test set
 python src/train.py nb lr    #    train only selected models
 python src/train.py rf gb    #    train random forest and gradient boosting only
 ```
@@ -101,6 +101,21 @@ Top features:
 - **tree**: Gini importance.
 - **rf**: impurity-based feature importance aggregated across the forest.
 - **gb**: impurity-based feature importance aggregated across the boosting trees.
+
+### 3. Final evaluation (`evaluate.py`)
+
+After training all five models, `evaluate.py` loads the saved pipelines and evaluates them on the same 500 test reviews. It treats AI-generated reviews (`label = 1`) as the positive class and writes the following files:
+
+| output | content |
+|--------|---------|
+| `results/tables/test_metrics.csv` | accuracy, precision, recall and F1 for each model |
+| `results/tables/confusion_{name}.csv` | confusion matrix for one model |
+| `results/tables/test_predictions.csv` | review ID, label, sentiment and aligned predictions from all models |
+| `results/tables/mcnemar_tests.csv` | exact McNemar tests for NB versus LR, tree versus RF and tree versus GB |
+| `results/tables/rf_by_sentiment.csv` | random forest metrics for positive and negative reviews |
+| `results/tables/rf_sentiment_fisher.csv` | Fisher exact test comparing random forest accuracy across the two sentiment groups |
+
+The statistical tests use a significance level of 0.01. Running `split_data.py`, `train.py` and `evaluate.py` in that order reproduces the complete analysis from `data/raw/all_data.csv`. If the raw file is absent, `split_data.py` downloads it before creating the fixed train-test split.
 
 ### Using the modules
 

@@ -22,7 +22,8 @@ project1/
 │   ├── tree.py            单棵分类树（代价复杂度剪枝）
 │   ├── rf.py              随机森林（树的数量、每次分裂考虑的特征数）
 │   ├── gb.py              梯度提升（树的数量、学习率、树深度）
-│   └── train.py           调参，用最优参数在全部训练集上重新训练，保存结果
+│   ├── train.py           调参，用最优参数在全部训练集上重新训练，保存结果
+│   └── evaluate.py        在最终测试集上评估已训练的模型
 ├── results/
 │   ├── models/            训练好的模型（.joblib），不进 git
 │   ├── tables/            报告表格所用的 CSV 结果
@@ -32,8 +33,6 @@ project1/
 ├── README.md              英文说明
 └── README.zh-CN.md        中文说明
 ```
-
-还没写的：`evaluate.py`（测试集指标、McNemar 检验、随机森林在正面和负面评论上的比较），见文末“后续评估”。
 
 ## 环境配置
 
@@ -51,6 +50,7 @@ Linux 和 macOS 上把 `.venv/Scripts/python` 换成 `.venv/bin/python`。
 ```bash
 python src/split_data.py     # 1. 生成 train.csv / test.csv
 python src/train.py          # 2. 调参并训练全部 5 个模型：nb、lr、tree、rf、gb
+python src/evaluate.py       # 3. 在最终测试集上评估保存的模型
 python src/train.py nb lr    #    也可以只跑其中几个
 python src/train.py rf gb    #    只跑随机森林和梯度提升
 ```
@@ -190,11 +190,10 @@ vec = TextPreprocessor().make_vec()   # 未拟合的 CountVectorizer，放进 Pi
 - **按标签 × 正负面分层**：保证训练集和测试集的类别分布一致，同时让测试集中正面、负面评论数量平衡，方便比较模型在两类评论上的准确率。
 - **不使用评分等元数据**：AI 评论的评分分布与真实评论明显不同（负面评论平均 3.0 对 3.7，正面评论平均 8.4 对 9.4）。使用评分会让模型依赖元数据而不是文本，所以只用评论文本作为输入。
 
-## 后续评估
+## 最终评估
 
-5 个模型都选定之后，`evaluate.py` 还要完成：
+训练完 5 个模型后，运行 `evaluate.py`。脚本在同一批 500 条测试评论上计算 accuracy、precision、recall 和 F1，并以 AI 生成评论（`label = 1`）为正类。它还执行三组精确 McNemar 检验：朴素贝叶斯与逻辑回归、单棵树与随机森林、单棵树与梯度提升。显著性水平设为 0.01。
 
-1. 在同一批 500 条测试评论上计算 accuracy、precision、recall、F1，以 AI 生成（`label = 1`）为正类。
-2. 朴素贝叶斯和逻辑回归比较；随机森林、梯度提升分别和单棵树比较。用 McNemar 检验，显著性水平 0.01，并报告每次检验的 2×2 表。
-3. 用同一个最终随机森林，分别计算它在正面（POS）和负面（NEG）测试评论上的准确率。两组是不同的评论，要用适合独立样本的检验。
-4. 保存每条测试评论的 ID、真实标签、正负面和各模型的预测，保证不同模型的预测能逐条对齐。
+随机森林的结果会进一步按正面和负面评论分组。由于两组由不同评论构成，脚本使用 Fisher 精确检验比较两组准确率。每条测试评论的 ID、真实标签、情感类别和五个模型的预测都保存在 `results/tables/test_predictions.csv` 中，其他指标和检验结果也写入同一目录。
+
+依次运行 `split_data.py`、`train.py` 和 `evaluate.py`，即可从 `data/raw/all_data.csv` 重新生成完整分析。如果原始文件不存在，第一步会先下载数据，再创建固定的训练集和测试集。
